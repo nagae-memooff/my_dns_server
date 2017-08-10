@@ -34,6 +34,7 @@ func parse_query(m *dns.Msg) {
 
 			if ip != "" {
 				rr, err := dns.NewRR(fmt.Sprintf("%s A %s", q.Name, ip))
+				rr.Header().Ttl = 120
 				if err == nil {
 					m.Answer = append(m.Answer, rr)
 				}
@@ -60,10 +61,12 @@ func handle_dns_request(w dns.ResponseWriter, r *dns.Msg) {
 func update_dns(w http.ResponseWriter, req *http.Request) {
 	// body := []byte(`{"nagae-memooff.me": "192.168.10.10"}`)
 	if req.Method != "POST" {
+		w.Write([]byte("err"))
 		return
 	}
 
 	body, err := ioutil.ReadAll(req.Body)
+	defer req.Body.Close()
 	var new_rec map[string]string
 
 	err = json.Unmarshal(body, &new_rec)
