@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -57,16 +58,15 @@ func handle_dns_request(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func update_dns(w http.ResponseWriter, req *http.Request) {
-	// j := []byte(`{"nagae-memooff.me": "192.168.10.10"}`)
+	// body := []byte(`{"nagae-memooff.me": "192.168.10.10"}`)
 	if req.Method != "POST" {
 		return
 	}
 
-	j := []byte(req.PostFormValue("data"))
-
+	body, err := ioutil.ReadAll(req.Body)
 	var new_rec map[string]string
 
-	err := json.Unmarshal(j, &new_rec)
+	err = json.Unmarshal(body, &new_rec)
 	if err != nil {
 		w.Write([]byte("err"))
 		return
