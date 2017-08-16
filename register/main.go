@@ -52,6 +52,10 @@ func GetIP() (string, error) {
 	req.Header.Set("User-Agent", "curl/7.47.0")
 
 	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
