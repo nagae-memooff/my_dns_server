@@ -16,10 +16,7 @@ import (
 var (
 	lock sync.RWMutex
 
-	records = map[string]string{
-		"files.nagae-memooff.me": "163.44.165.76",
-		"nagae-memooff.me":       "163.44.165.76",
-	}
+	records map[string]string
 )
 
 func parse_query(m *dns.Msg) {
@@ -115,6 +112,12 @@ func main() {
 		fmt.Println("FATAL ERROR: load config failed." + err.Error())
 		os.Exit(1)
 	}
+
+	records = map[string]string{
+		"files.nagae-memooff.me": config.Get("default_ip"),
+		"nagae-memooff.me":       config.Get("default_ip"),
+	}
+
 	// start server
 	dns.HandleFunc("nagae-memooff.me", handle_dns_request)
 	listen := config.Get("dns_listen")
