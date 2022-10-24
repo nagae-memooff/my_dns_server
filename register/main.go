@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
+	// "errors"
+	// "fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,7 +15,7 @@ import (
 var (
 	regex    *regexp.Regexp
 	last_ip  string
-	interval = time.Minute * 5
+	interval = time.Minute * 1
 
 	registe_url = "http://nagae-memooff.me/dns/update"
 
@@ -25,68 +25,59 @@ var (
 func main() {
 	regex = regexp.MustCompile(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`)
 
-	var err error
-	last_ip, err = GetIP()
-	if err != nil {
-		log.Println(err)
-	}
-	RegisteToServer(last_ip)
-
-	log.Printf("started with ip: %s.", last_ip)
-
 	for {
-		CompareIP()
+		RegisteToServer("")
 		time.Sleep(interval)
 	}
 
 }
 
-func GetIP() (string, error) {
-	client := &http.Client{}
+// func GetIP() (string, error) {
+// 	client := &http.Client{}
+//
+// 	req, err := http.NewRequest("GET", "http://ip.cn", nil)
+// 	if err != nil {
+// 		return "", err
+// 	}
+//
+// 	req.Header.Set("User-Agent", "curl/7.47.0")
+//
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return "", err
+// 	}
+//
+// 	defer resp.Body.Close()
+//
+// 	body, err := ioutil.ReadAll(resp.Body)
+// 	if err != nil {
+// 		return "", err
+// 	}
+//
+// 	if !regex.Match(body) {
+// 		return "", errors.New(fmt.Sprintf("can't find ip. resp body: %s.", body))
+// 	}
+//
+// 	iplist := regex.FindAllString(string(body), 1)
+//
+// 	return iplist[0], nil
+// }
 
-	req, err := http.NewRequest("GET", "http://ip.cn", nil)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("User-Agent", "curl/7.47.0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if !regex.Match(body) {
-		return "", errors.New(fmt.Sprintf("can't find ip. resp body: %s.", body))
-	}
-
-	iplist := regex.FindAllString(string(body), 1)
-
-	return iplist[0], nil
-}
-
-func CompareIP() {
-	new_ip, err := GetIP()
-	if err != nil {
-		log.Println(err)
-	}
-
-	if new_ip == last_ip {
-		// log.Printf("IP 相等： %s", new_ip)
-	} else {
-		log.Printf("IP changed: %s -> %s.", last_ip, new_ip)
-		RegisteToServer(new_ip)
-
-		last_ip = new_ip
-	}
-}
+// func CompareIP() {
+// 	new_ip, err := GetIP()
+// 	if err != nil {
+// 		log.Println(err)
+// 	}
+//
+// 	if new_ip == last_ip {
+// 		// log.Printf("IP 相等： %s", new_ip)
+// 	} else {
+// 		log.Printf("IP changed: %s -> %s.", last_ip, new_ip)
+// 		RegisteToServer(new_ip)
+//
+// 		last_ip = new_ip
+// 	}
+// }
 
 func RegisteToServer(ip string) {
 	data := map[string]string{
