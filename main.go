@@ -8,15 +8,18 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/miekg/dns"
 	"github.com/nagae-memooff/config"
+	"github.com/nagae-memooff/goutils"
 )
 
 var (
 	lock sync.RWMutex
 
-	records map[string]string
+	records      map[string]string
+	cached_token CachedToken
 )
 
 func parse_query(m *dns.Msg) {
@@ -75,11 +78,25 @@ func update_dns(w http.ResponseWriter, req *http.Request) {
 	lock.Lock()
 	defer lock.Unlock()
 
+	old_record := records["files.nagae-memooff.me"]
+
+	if new_rec["files.nagae-memooff.me"] == "" {
+		new_rec["files.nagae-memooff.me"] = req.Header.Get("X-Real-IP")
+	}
+
+	new_record := new_rec["files.nagae-memooff.me"]
+
+	if new_record != old_record {
+		// 如果不相等则触发更新ddns逻辑
+		log.Printf("ip地址变更： %s → %s", old_record, new_record)
+		update_ddns(new_record)
+	}
+
 	for k, v := range new_rec {
 		records[k] = v
 	}
 
-	w.Write([]byte("ok"))
+	w.Write([]byte(req.Header.Get("X-Real-IP")))
 }
 
 func replace_dns(w http.ResponseWriter, req *http.Request) {
@@ -102,6 +119,12 @@ func replace_dns(w http.ResponseWriter, req *http.Request) {
 
 	records = new_rec
 	w.Write([]byte("ok"))
+}
+
+func update_ddns(new_ip string) {
+	access_token := GetAccessTokenFromCache()
+
+	UpdateRecord(new_ip, access_token)
 }
 
 func main() {
@@ -134,5 +157,97 @@ func main() {
 	defer server.Shutdown()
 	if err != nil {
 		log.Fatalf("Failed to start server: %s\n ", err.Error())
+	}
+}
+
+type TokenResponse struct {
+	Access struct {
+		Token struct {
+			IssuedAt string `json:"issued_at"`
+			Expires  string `json:"expires"`
+			Id       string `json:"id"`
+		} `json:"token"`
+	} `json:"access"`
+}
+
+type TokenRequest struct {
+	Auth struct {
+		PasswordCredentials struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		} `json:"passwordCredentials"`
+
+		TenantID string `json:"tenantId"`
+	} `json:"auth"`
+}
+
+type CachedToken struct {
+	ExpiresAt time.Time
+	Id        string
+}
+
+func GetAccessTokenFromCache() (token string) {
+	if cached_token.Id == "" || cached_token.ExpiresAt.Before(time.Now()) {
+		token, _ = GetAccessToken()
+	} else {
+		token = cached_token.Id
+	}
+
+	return
+}
+
+func GetAccessToken() (token string, expires_at time.Time) {
+	params := TokenRequest{}
+
+	params.Auth.PasswordCredentials.Username = config.Get("conoha_username")
+	params.Auth.PasswordCredentials.Password = config.Get("conoha_password")
+	params.Auth.TenantID = config.Get("cohona_tenant_id")
+
+	code, response, err := utils.DoHTTPJsonRequest("POST", "https://identity.tyo1.conoha.io/v2.0/tokens", params, nil, nil)
+
+	if code != 200 || err != nil {
+		// TODO
+		log.Printf("获取token出错. code: %d, err: %v, response: %s", code, err, response)
+
+	}
+
+	token_response := TokenResponse{}
+	err = json.Unmarshal([]byte(response), &token_response)
+	if err != nil {
+		// TODO
+		log.Printf("解析json失败: %v", err)
+	}
+
+	token = token_response.Access.Token.Id
+	expires_at = time.Now().Add(time.Hour * 23)
+
+	cached_token = CachedToken{
+		Id:        token,
+		ExpiresAt: expires_at,
+	}
+
+	return
+}
+
+func UpdateRecord(new_ip, access_token string) {
+	header := map[string]string{
+		"X-Auth-Token": access_token,
+	}
+
+	body := map[string]string{
+		"data": new_ip,
+	}
+
+	// 从配置读取
+	domain_uuid := config.Get("conoha_domain_uuid")
+	record_uuid := config.Get("conoha_record_uuid")
+
+	url := fmt.Sprintf("https://dns-service.tyo1.conoha.io/v1/domains/%s/records/%s", domain_uuid, record_uuid)
+
+	code, response, err := utils.DoHTTPJsonRequest("PUT", url, body, &header, nil)
+
+	if code != 200 || err != nil {
+		cached_token = CachedToken{}
+		log.Printf("更新dns记录失败： code: %d, err: %v, response: %s", code, err, response)
 	}
 }
