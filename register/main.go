@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	utils "github.com/nagae-memooff/goutils"
 	// "errors"
 	// "fmt"
 	"io/ioutil"
@@ -100,5 +101,15 @@ func RegisteToServer(ip string) {
 		return
 	}
 
-	log.Printf("report ip %s.", body)
+	now_ip := string(body)
+
+	if now_ip != last_ip {
+		// ip变化，注册iptables规则
+		log.Printf("ip变化，注册iptables规则。")
+		utils.Sysexec("/home/nagae-memooff/dns/ext_ip_nat.sh", now_ip)
+	}
+
+	last_ip = now_ip
+
+	log.Printf("report ip %s.", last_ip)
 }
