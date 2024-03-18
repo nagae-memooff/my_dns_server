@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,7 +90,10 @@ func update_dns(w http.ResponseWriter, req *http.Request) {
 	if new_record != old_record {
 		// 如果不相等则触发更新ddns逻辑
 		log.Printf("ip地址变更： %s → %s", old_record, new_record)
-		update_ddns(new_record)
+		// update_ddns(new_record)
+
+		access_token := GetAccessTokenFromCache()
+		UpdateRecord(new_record, access_token)
 	}
 
 	for k, v := range new_rec {
@@ -97,6 +101,51 @@ func update_dns(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Write([]byte(req.Header.Get("X-Real-IP")))
+}
+
+func update_v6_dns(w http.ResponseWriter, req *http.Request) {
+	// body := []byte(`{"nagae-memooff.me": "192.168.10.10"}`)
+	if req.Method != "POST" {
+		w.Write([]byte("err"))
+		return
+	}
+
+	body, err := ioutil.ReadAll(req.Body)
+	defer req.Body.Close()
+	var new_rec map[string]string
+
+	err = json.Unmarshal(body, &new_rec)
+	if err != nil {
+		w.Write([]byte("err"))
+		return
+	}
+
+	lock.Lock()
+	defer lock.Unlock()
+
+	old_record := records["v6.files.nagae-memooff.me"]
+
+	// v6的ip不是可逆的，即使没有也没办法
+	// if new_rec["files.nagae-memooff.me"] == "" {
+	// 	new_rec["files.nagae-memooff.me"] = req.Header.Get("X-Real-IP")
+	// }
+
+	new_record := new_rec["v6.files.nagae-memooff.me"]
+
+	if new_record != old_record {
+		// 如果不相等则触发更新ddns逻辑
+		log.Printf("ip地址变更： %s → %s", old_record, new_record)
+
+		access_token := GetAccessTokenFromCache()
+
+		UpdateV6Record(new_record, access_token)
+	}
+
+	for k, v := range new_rec {
+		records[k] = v
+	}
+
+	w.Write([]byte(new_record))
 }
 
 func replace_dns(w http.ResponseWriter, req *http.Request) {
@@ -121,12 +170,6 @@ func replace_dns(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-func update_ddns(new_ip string) {
-	access_token := GetAccessTokenFromCache()
-
-	UpdateRecord(new_ip, access_token)
-}
-
 func main() {
 	// attach request handler func
 
@@ -149,6 +192,7 @@ func main() {
 	log.Printf("Starting at %s\n", listen)
 
 	http.HandleFunc("/update", update_dns)
+	http.HandleFunc("/update_v6", update_v6_dns)
 	http.HandleFunc("/replace", replace_dns)
 
 	go http.ListenAndServe(config.Get("http_listen"), nil)
@@ -240,14 +284,41 @@ func UpdateRecord(new_ip, access_token string) {
 
 	// 从配置读取
 	domain_uuid := config.Get("conoha_domain_uuid")
-	record_uuid := config.Get("conoha_record_uuid")
+	record_uuids := strings.Split(config.Get("conoha_record_uuid"), ",")
 
-	url := fmt.Sprintf("https://dns-service.tyo1.conoha.io/v1/domains/%s/records/%s", domain_uuid, record_uuid)
+	for _, record_uuid := range record_uuids {
+		url := fmt.Sprintf("https://dns-service.tyo1.conoha.io/v1/domains/%s/records/%s", domain_uuid, record_uuid)
 
-	code, response, err := utils.DoHTTPJsonRequest("PUT", url, body, &header, nil)
+		code, response, err := utils.DoHTTPJsonRequest("PUT", url, body, &header, nil)
 
-	if code != 200 || err != nil {
-		cached_token = CachedToken{}
-		log.Printf("更新dns记录失败： code: %d, err: %v, response: %s", code, err, response)
+		if code != 200 || err != nil {
+			cached_token = CachedToken{}
+			log.Printf("更新v4 dns记录失败：uuid: %s code: %d, err: %v, response: %s", record_uuid, code, err, response)
+		}
+	}
+}
+
+func UpdateV6Record(new_ip, access_token string) {
+	header := map[string]string{
+		"X-Auth-Token": access_token,
+	}
+
+	body := map[string]string{
+		"data": new_ip,
+	}
+
+	// 从配置读取
+	domain_uuid := config.Get("conoha_domain_uuid")
+	record_uuids := strings.Split(config.Get("conoha_v6_record_uuid"), ",")
+
+	for _, record_uuid := range record_uuids {
+		url := fmt.Sprintf("https://dns-service.tyo1.conoha.io/v1/domains/%s/records/%s", domain_uuid, record_uuid)
+
+		code, response, err := utils.DoHTTPJsonRequest("PUT", url, body, &header, nil)
+
+		if code != 200 || err != nil {
+			cached_token = CachedToken{}
+			log.Printf("更新v6 dns记录失败：uuid: %s code: %d, err: %v, response: %s", record_uuid, code, err, response)
+		}
 	}
 }
