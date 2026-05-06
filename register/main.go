@@ -3,7 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"os"
+
 	utils "github.com/nagae-memooff/goutils"
+
 	// "errors"
 	// "fmt"
 	"fmt"
@@ -13,6 +17,8 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+
+	"github.com/nagae-memooff/config"
 )
 
 var (
@@ -21,13 +27,25 @@ var (
 	last_ip_v6 string
 	interval   = time.Minute * 1
 
-	registe_url    = "http://nagae-memooff.me/dns/update"
-	registe_v6_url = "http://nagae-memooff.me/dns/update_v6"
+	register_url    = ""
+	register_v6_url = ""
 
-//   registe_url = "http://localhost:8081/update"
+// register_url = "http://localhost:8081/update"
 )
 
 func main() {
+	err := config.Parse("./register.conf")
+	if err != nil {
+		fmt.Println("FATAL ERROR: load config failed." + err.Error())
+		os.Exit(1)
+	}
+
+	config.Default("register_url", "https://api.nagae-memooff.top/dns/update")
+	config.Default("register_v6_url", "https://api.nagae-memooff.top/dns/update_v6")
+
+	register_url = config.Get("register_url")
+	register_v6_url = config.Get("register_url")
+
 	regex = regexp.MustCompile(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`)
 
 	for {
@@ -92,7 +110,7 @@ func RegisteToServer(ip string) {
 
 	data_json, _ := json.Marshal(data)
 
-	resp, err := http.Post(registe_url, "", bytes.NewReader(data_json))
+	resp, err := http.Post(register_url, "", bytes.NewReader(data_json))
 	if err != nil {
 		log.Println(err)
 		return
@@ -128,7 +146,7 @@ func RegisteV6ToServer() {
 
 	data_json, _ := json.Marshal(data)
 
-	resp, err := http.Post(registe_v6_url, "", bytes.NewReader(data_json))
+	resp, err := http.Post(register_v6_url, "", bytes.NewReader(data_json))
 	if err != nil {
 		log.Println(err)
 		return
