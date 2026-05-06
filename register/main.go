@@ -43,7 +43,7 @@ func main() {
 	config.Default("register_v6_url", "https://api.nagae-memooff.top/dns/update_v6")
 
 	register_url = config.Get("register_url")
-	register_v6_url = config.Get("register_url")
+	register_v6_url = config.Get("register_v6_url")
 
 	regex = regexp.MustCompile(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`)
 
