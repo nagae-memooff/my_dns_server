@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"os"
+
 	// "errors"
 	// "fmt"
 	"io/ioutil"
@@ -10,6 +13,8 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+
+	"github.com/nagae-memooff/config"
 )
 
 var (
@@ -17,12 +22,22 @@ var (
 	last_ip  string
 	interval = time.Minute * 1
 
-	registe_url = "http://nagae-memooff.me/dns/update"
+	registe_url = ""
 
-//   registe_url = "http://localhost:8081/update"
+// registe_url = "http://localhost:8081/update"
 )
 
 func main() {
+	err := config.Parse("./register.conf")
+	if err != nil {
+		fmt.Println("FATAL ERROR: load config failed." + err.Error())
+		os.Exit(1)
+	}
+
+	config.Default("register_url", "https://api.nagae-memooff.top/dns/update")
+
+	registe_url = config.Get("register_url")
+
 	regex = regexp.MustCompile(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`)
 
 	for {
